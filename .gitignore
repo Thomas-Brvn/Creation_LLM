@@ -1,0 +1,37 @@
+# Environnement virtuel
+venv/
+.venv/
+env/
+
+# Données (trop volumineuses pour GitHub)
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs et cache
+*.log
+.cache/
+
+# Weights et checkpoints du modèle
+checkpoints/
+*.pt
+*.pth
