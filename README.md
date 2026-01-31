@@ -55,7 +55,7 @@ Un modèle ne comprend pas le texte, seulement des **nombres**. La tokenization 
 **BPE (Byte Pair Encoding)** fusionne les caractères fréquents pour créer un vocabulaire efficace. Avantage : aucun mot n'est "inconnu", tout peut être tokenizé.
 
 <details>
-<summary><strong>📖 Voir les détails complets sur BPE</strong></summary>
+<summary><strong>Détails complets sur BPE</strong></summary>
 
 ---
 
