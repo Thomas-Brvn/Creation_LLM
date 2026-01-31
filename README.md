@@ -46,90 +46,50 @@ Texte brut
 
 ## Partie 1 : Tokenization (BPE)
 
-### Pourquoi tokenizer ?
-
-Un modèle de deep learning ne comprend pas le texte. Il ne comprend que des **nombres**.
+Un modèle ne comprend pas le texte, seulement des **nombres**. La tokenization convertit le texte en IDs :
 
 ```
-"Bonjour" → ??? → Le modèle
+"Bonjour le monde" → [456, 12, 892] → Le modèle
 ```
 
-La tokenization convertit le texte en une liste de nombres (IDs).
+**BPE (Byte Pair Encoding)** fusionne les caractères fréquents pour créer un vocabulaire efficace. Avantage : aucun mot n'est "inconnu", tout peut être tokenizé.
 
-```
-"Bonjour" → [2, 456, 3] → Le modèle
-```
+<details>
+<summary><strong>📖 Voir les détails complets sur BPE</strong></summary>
 
 ---
 
 ### Les 256 bytes de base
 
-#### Pourquoi 256 ?
-
 ```
 1 byte = 8 bits = 2⁸ = 256 valeurs possibles (0 à 255)
 ```
 
-C'est la base de l'informatique. **Non modifiable.**
-
-Chaque caractère a un code :
+C'est la base de l'informatique. Chaque caractère a un code :
 
 ```
-"A" = 65
-"a" = 97
-" " = 32
+"A" = 65    "a" = 97    " " = 32
 "é" = 195 + 169 (2 bytes en UTF-8)
 ```
 
-#### Conséquence importante
-
-Tout texte peut être représenté en bytes → BPE peut tokenizer **n'importe quel texte**, même des mots inventés.
+Tout texte peut être représenté en bytes → BPE peut tokenizer **n'importe quel texte**.
 
 ---
 
-### L'algorithme BPE (Byte Pair Encoding)
+### L'algorithme BPE
 
-#### Idée
+**Idée :** Fusionner les paires de caractères les plus fréquentes.
 
-Fusionner les paires de caractères les plus fréquentes pour créer de nouveaux tokens.
-
-#### Exemple pas à pas
-
-Texte : `"abab abab"`
-
-**Étape 0 : Chaque caractère = 1 token**
+**Exemple** avec `"abab abab"` :
 
 ```
-[a, b, a, b, ' ', a, b, a, b]  →  9 tokens
-```
+Départ:  [a, b, a, b, ' ', a, b, a, b]  →  9 tokens
 
-**Étape 1 : Compter les paires**
+Paire (a,b) apparaît 4 fois → fusion en "ab"
+         [ab, ab, ' ', ab, ab]          →  5 tokens
 
-```
-(a, b) → 4 fois  ← LA PLUS FRÉQUENTE
-(b, a) → 2 fois
-(b, ' ') → 1 fois
-(' ', a) → 1 fois
-```
-
-**Étape 2 : Fusionner la paire (a, b) → nouveau token "ab"**
-
-```
-[ab, ab, ' ', ab, ab]  →  5 tokens
-```
-
-**Étape 3 : Recompter les paires**
-
-```
-(ab, ab) → 2 fois  ← LA PLUS FRÉQUENTE
-(ab, ' ') → 1 fois
-(' ', ab) → 1 fois
-```
-
-**Étape 4 : Fusionner (ab, ab) → nouveau token "abab"**
-
-```
-[abab, ' ', abab]  →  3 tokens
+Paire (ab,ab) apparaît 2 fois → fusion en "abab"
+         [abab, ' ', abab]              →  3 tokens
 ```
 
 **Résultat :** 9 tokens → 3 tokens !
@@ -138,68 +98,42 @@ Texte : `"abab abab"`
 
 ### vocab_size
 
-C'est le nombre total de tokens dans le vocabulaire :
-
 ```
 vocab_size = 256 (bytes) + 4 (spéciaux) + nombre de merges
 ```
 
-#### Impact du vocab_size
-
-| vocab_size | Séquences | Modèle | Contexte effectif |
-|------------|-----------|--------|-------------------|
-| Petit (1000) | Longues | Léger | Moins de mots visibles |
-| Grand (50000) | Courtes | Lourd | Plus de mots visibles |
-
-#### Exemple
-
-```
-Texte: "anticonstitutionnellement"
-
-vocab_size = 1000:  [an][ti][con][sti][tu][tion][nel][le][ment]  = 9 tokens
-vocab_size = 50000: [anticonstitutionnellement]                  = 1 token
-```
+| vocab_size | Séquences | Modèle |
+|------------|-----------|--------|
+| Petit (1K) | Longues | Léger |
+| Grand (50K) | Courtes | Lourd |
 
 ---
 
 ### Tokens spéciaux
 
-| Token | ID | Rôle |
-|-------|-----|------|
-| `<pad>` | 0 | Remplissage pour égaliser les longueurs |
-| `<unk>` | 1 | Mot inconnu (jamais utilisé avec BPE) |
-| `<bos>` | 2 | Début de séquence (Beginning Of Sequence) |
-| `<eos>` | 3 | Fin de séquence (End Of Sequence) |
+| Token | Rôle |
+|-------|------|
+| `<pad>` | Remplissage |
+| `<unk>` | Mot inconnu (jamais utilisé avec BPE) |
+| `<bos>` | Début de séquence |
+| `<eos>` | Fin de séquence |
 
 ---
 
 ### BPE vs ancien système
 
-#### Ancien système (par mots)
-
 ```
-Vocabulaire fixe : ["le", "chat", "mange", ...]
-
-"quinoa" → <UNK>  (mot inconnu !)
+Ancien:  "quinoa" → <UNK>  (mot inconnu !)
+BPE:     "quinoa" → [qui][no][a]  (toujours découpable)
 ```
 
-#### BPE (moderne)
+</details>
 
-```
-"quinoa" → [qui][no][a]  (découpé, jamais inconnu !)
-"xyzabc" → [x][y][z][a][b][c]  (fonctionne toujours)
-```
-
-**Avantage majeur de BPE :** Pas de mot inconnu, tout peut être tokenizé.
-
----
-
-### Questions de vérification - Partie 1
+### Questions de vérification
 
 1. Pourquoi exactement 256 bytes de base ?
 2. Un mot inventé "xkzbrt" génère-t-il une erreur avec BPE ?
 3. Si j'augmente vocab_size, les séquences sont plus courtes ou plus longues ?
-4. Pourquoi BPE n'a jamais de token `<UNK>` ?
 
 ---
 
