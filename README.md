@@ -278,3 +278,4 @@ Creation_LLM/
 - [Andrej Karpathy - Let's build GPT](https://www.youtube.com/watch?v=kCc8FmEb1nY)
 - [Attention Is All You Need (paper)](https://arxiv.org/abs/1706.03762)
 
+# Pair programming contribution
