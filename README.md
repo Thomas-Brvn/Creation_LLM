@@ -277,3 +277,4 @@ Creation_LLM/
 - [The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)
 - [Andrej Karpathy - Let's build GPT](https://www.youtube.com/watch?v=kCc8FmEb1nY)
 - [Attention Is All You Need (paper)](https://arxiv.org/abs/1706.03762)
+
