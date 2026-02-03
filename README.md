@@ -243,11 +243,126 @@ Token IDs        →  Embedding Table  →  Vecteurs
 
 ---
 
+## Partie 3 : Attention (concept)
+
+Le mot "**il**" dans "Le chat dort car **il** est fatigué" fait référence à "chat". Comment le modèle le sait-il ? Grâce à l'**attention** : chaque token regarde les autres tokens pour comprendre le contexte.
+
+```
+"il" regarde → ["Le", "chat", "dort", "car"] → comprend que "il" = "chat"
+```
+
+L'attention calcule un **score de pertinence** entre chaque paire de tokens, puis fait une moyenne pondérée.
+
+<details>
+<summary><strong>📖 Voir les détails complets sur l'Attention</strong></summary>
+
+---
+
+### Pourquoi l'attention ?
+
+Sans contexte, les mots sont ambigus :
+
+```
+"La souris mange le fromage"  → souris = animal
+"La souris ne marche plus"    → souris = périphérique
+```
+
+L'attention permet au modèle de **regarder les autres mots** pour lever l'ambiguïté.
+
+---
+
+### Self-Attention
+
+"Self" car les tokens d'une même séquence s'observent entre eux :
+
+```
+Séquence: ["Le", "chat", "mange"]
+
+"Le"    regarde: ["Le", "chat", "mange"]
+"chat"  regarde: ["Le", "chat", "mange"]
+"mange" regarde: ["Le", "chat", "mange"]
+```
+
+Chaque token calcule à quel point les autres tokens sont **pertinents** pour lui.
+
+---
+
+### Intuition : la fête
+
+Imagine une fête avec 4 personnes. Tu veux savoir à qui parler :
+
+1. Tu regardes chaque personne (calcul des scores)
+2. Tu décides qui est intéressant pour toi (scores de pertinence)
+3. Tu écoutes plus ceux qui t'intéressent (moyenne pondérée)
+
+```
+Toi → [Alice: 0.5, Bob: 0.3, Claire: 0.2]
+        ↓
+Tu absorbes 50% d'Alice, 30% de Bob, 20% de Claire
+```
+
+C'est exactement ce que fait l'attention avec les tokens.
+
+---
+
+### Masquage causal (GPT)
+
+Dans un LLM comme GPT, un token ne peut voir que les tokens **précédents** (pas le futur) :
+
+```
+Séquence: ["Le", "chat", "mange", "la", "souris"]
+
+"Le"     voit: ["Le"]
+"chat"   voit: ["Le", "chat"]
+"mange"  voit: ["Le", "chat", "mange"]
+"la"     voit: ["Le", "chat", "mange", "la"]
+"souris" voit: ["Le", "chat", "mange", "la", "souris"]
+```
+
+Pourquoi ? Sinon le modèle "tricherait" en regardant la réponse pendant l'entraînement.
+
+---
+
+### Complexité O(n²)
+
+Chaque token regarde **tous** les autres tokens :
+
+```
+n tokens → n × n = n² comparaisons
+
+ 64 tokens  →    4,096 comparaisons
+256 tokens  →   65,536 comparaisons
+1024 tokens → 1,048,576 comparaisons
+```
+
+C'est pourquoi les LLMs ont une limite de contexte (`max_seq_len`).
+
+---
+
+### En résumé
+
+```
+Embeddings (n, d_model)
+         ↓
+    Self-Attention  →  Chaque token regarde les autres
+         ↓
+Contexte enrichi (n, d_model)
+```
+
+</details>
+
+### Questions de vérification
+
+1. Pourquoi "il" a besoin de regarder les autres mots ?
+2. Dans GPT, le 3ème token peut-il voir le 5ème token ?
+3. Pourquoi la complexité est O(n²) ?
+
+---
+
 ## Prochaines parties
-- **Partie 3** : Attention (concept) - Comprendre pourquoi chaque mot regarde les autres
 - **Partie 4** : Attention (calculs) - Les maths derrière Q, K, V
-- **Partie 5** : Multi-Head Attention - Plusieurs "points de vue"
-- **Partie 6** : Positional Encoding - Comment le modèle connaît l'ordre des mots
+- **Partie 5** : Multi-Head Attention
+- **Partie 6** : Positional Encoding (RoPE)
 - **Partie 7** : Feed-Forward et Normalisation
 - **Partie 8** : Architecture GPT complète
 - **Partie 9** : Entraînement
