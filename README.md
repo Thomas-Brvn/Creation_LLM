@@ -359,11 +359,186 @@ Contexte enrichi (n, d_model)
 
 ---
 
+## Partie 4 : Attention (calculs)
+
+L'attention utilise trois vecteurs par token : **Query** (ce que je cherche), **Key** (ce que je contiens), **Value** (l'info que je donne). La formule :
+
+```
+Attention(Q, K, V) = softmax(Q × Kᵀ / √d_k) × V
+```
+
+En gros : on calcule la similarité entre Q et K, on normalise avec softmax, puis on fait une moyenne pondérée des V.
+
+<details>
+<summary><strong>📖 Voir les détails complets sur Q, K, V</strong></summary>
+
+---
+
+### Query, Key, Value - Intuition
+
+Imagine une bibliothèque :
+
+| Concept | Analogie | Rôle |
+|---------|----------|------|
+| **Query (Q)** | Ta question | "Je cherche des infos sur les chats" |
+| **Key (K)** | Titre du livre | "Animaux domestiques", "Cuisine", ... |
+| **Value (V)** | Contenu du livre | L'information utile |
+
+Tu compares ta **question** (Q) avec les **titres** (K) pour trouver les livres pertinents, puis tu lis leur **contenu** (V).
+
+---
+
+### Comment obtenir Q, K, V ?
+
+Chaque token a un embedding. On le projette avec 3 matrices apprises :
+
+```
+embedding (d_model) → W_Q → Query  (d_k)
+embedding (d_model) → W_K → Key    (d_k)
+embedding (d_model) → W_V → Value  (d_v)
+```
+
+```python
+Q = embedding @ W_Q  # (n, d_model) @ (d_model, d_k) → (n, d_k)
+K = embedding @ W_K  # (n, d_model) @ (d_model, d_k) → (n, d_k)
+V = embedding @ W_V  # (n, d_model) @ (d_model, d_v) → (n, d_v)
+```
+
+---
+
+### Étape 1 : Scores d'attention
+
+On calcule la similarité entre chaque Q et chaque K :
+
+```
+scores = Q × Kᵀ
+```
+
+```
+Q: (n, d_k)
+K: (n, d_k) → Kᵀ: (d_k, n)
+
+scores = Q @ Kᵀ = (n, d_k) @ (d_k, n) = (n, n)
+```
+
+Résultat : une matrice (n × n) où `scores[i][j]` = similarité entre token i et token j.
+
+---
+
+### Étape 2 : Mise à l'échelle
+
+On divise par √d_k pour stabiliser les gradients :
+
+```
+scores = scores / √d_k
+```
+
+Sans ça, les scores deviennent trop grands → softmax sature → gradients nuls.
+
+---
+
+### Étape 3 : Masquage causal (optionnel)
+
+Pour GPT, on masque le futur avec -∞ :
+
+```
+scores (avant masque):       scores (après masque):
+[[0.5, 0.3, 0.2]             [[0.5,  -∞,  -∞]
+ [0.4, 0.6, 0.1]       →      [0.4, 0.6,  -∞]
+ [0.2, 0.3, 0.5]]             [0.2, 0.3, 0.5]]
+```
+
+---
+
+### Étape 4 : Softmax
+
+On convertit les scores en probabilités (somme = 1 par ligne) :
+
+```
+weights = softmax(scores)
+```
+
+```
+scores: [2.0, 1.0, -∞]  →  weights: [0.73, 0.27, 0.00]
+```
+
+---
+
+### Étape 5 : Moyenne pondérée des Values
+
+```
+output = weights × V
+```
+
+```
+weights: (n, n)
+V: (n, d_v)
+
+output = weights @ V = (n, n) @ (n, d_v) = (n, d_v)
+```
+
+Chaque token obtient un mélange des Values des autres tokens.
+
+---
+
+### Formule complète
+
+```
+Attention(Q, K, V) = softmax(Q × Kᵀ / √d_k) × V
+```
+
+```
+Entrée:  embeddings (n, d_model)
+         ↓
+      Q, K, V via projections
+         ↓
+      scores = Q @ Kᵀ / √d_k     → (n, n)
+         ↓
+      weights = softmax(scores)  → (n, n)
+         ↓
+      output = weights @ V       → (n, d_v)
+```
+
+---
+
+### Exemple numérique simplifié
+
+3 tokens, d_k = 2 :
+
+```
+Q = [[1, 0],    K = [[1, 0],    V = [[1, 2],
+     [0, 1],         [0, 1],         [3, 4],
+     [1, 1]]         [1, 1]]         [5, 6]]
+
+scores = Q @ Kᵀ = [[1, 0, 1],
+                   [0, 1, 1],
+                   [1, 1, 2]]
+
+scores / √2 = [[0.71, 0.00, 0.71],
+               [0.00, 0.71, 0.71],
+               [0.71, 0.71, 1.41]]
+
+weights = softmax(...) ≈ [[0.39, 0.22, 0.39],
+                          [0.22, 0.39, 0.39],
+                          [0.26, 0.26, 0.48]]
+
+output = weights @ V  (mélange pondéré)
+```
+
+</details>
+
+### Questions de vérification
+
+1. À quoi sert la division par √d_k ?
+2. Quelle est la shape de la matrice de scores pour 10 tokens ?
+3. Pourquoi met-on -∞ (et pas 0) pour masquer le futur ?
+
+---
+
 ## Prochaines parties
-- **Partie 4** : Attention (calculs) - Les maths derrière Q, K, V
 - **Partie 5** : Multi-Head Attention
 - **Partie 6** : Positional Encoding (RoPE)
-- **Partie 7** : Feed-Forward et Normalisation
+- **Partie 7** : Feed-Forward, RMSNorm, résiduel
 - **Partie 8** : Architecture GPT complète
 - **Partie 9** : Entraînement
 - **Partie 10** : Génération de texte
