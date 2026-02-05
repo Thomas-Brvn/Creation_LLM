@@ -535,10 +535,164 @@ output = weights @ V  (mélange pondéré)
 
 ---
 
+## Partie 5 : Multi-Head Attention
+
+Une seule attention capture un seul "point de vue". Avec **plusieurs têtes** en parallèle, le modèle peut capturer différents types de relations :
+
+```
+Tête 1 : relations syntaxiques (sujet → verbe)
+Tête 2 : relations sémantiques (chat → animal)
+Tête 3 : proximité (mots proches)
+...
+```
+
+On divise `d_model` entre les têtes : avec 384 dimensions et 6 têtes, chaque tête travaille sur 64 dimensions.
+
+<details>
+<summary><strong>📖 Voir les détails complets sur Multi-Head Attention</strong></summary>
+
+---
+
+### Pourquoi plusieurs têtes ?
+
+Une seule attention = un seul type de relation. Mais le langage est complexe :
+
+```
+"Le chat que j'ai adopté mange"
+
+- Relation syntaxique : "mange" → "chat" (sujet)
+- Relation référentielle : "j'" → locuteur
+- Relation temporelle : "ai adopté" → passé
+```
+
+Chaque tête peut se spécialiser sur un aspect différent.
+
+---
+
+### Comment ça marche ?
+
+On fait **n_heads** attentions en parallèle, chacune sur une portion de `d_model` :
+
+```
+d_model = 384
+n_heads = 6
+d_k = d_model / n_heads = 64  (par tête)
+```
+
+```
+                    Embedding (n, 384)
+                           ↓
+        ┌──────────────────┼──────────────────┐
+        ↓                  ↓                  ↓
+    Head 1 (64)        Head 2 (64)   ...  Head 6 (64)
+        ↓                  ↓                  ↓
+    Attention          Attention         Attention
+        ↓                  ↓                  ↓
+    Output (64)        Output (64)  ...  Output (64)
+        └──────────────────┼──────────────────┘
+                           ↓
+                    Concat (n, 384)
+                           ↓
+                    Projection W_O
+                           ↓
+                    Output (n, 384)
+```
+
+---
+
+### Les projections
+
+Chaque tête a ses propres matrices W_Q, W_K, W_V :
+
+```python
+# Pour chaque tête i
+Q_i = X @ W_Q_i  # (n, d_model) @ (d_model, d_k) → (n, d_k)
+K_i = X @ W_K_i
+V_i = X @ W_V_i
+
+head_i = Attention(Q_i, K_i, V_i)  # (n, d_k)
+```
+
+En pratique, on fait tout en une seule opération matricielle pour l'efficacité.
+
+---
+
+### Concat + Projection finale
+
+```python
+# Concaténer toutes les têtes
+concat = [head_1, head_2, ..., head_n]  # (n, n_heads * d_k) = (n, d_model)
+
+# Projection de sortie
+output = concat @ W_O  # (n, d_model) @ (d_model, d_model) → (n, d_model)
+```
+
+W_O permet de mélanger les informations des différentes têtes.
+
+---
+
+### Exemple concret
+
+```
+Modèle : d_model=384, n_heads=6
+
+Entrée: (batch=32, seq=128, d_model=384)
+
+Pour chaque tête (6 fois en parallèle):
+  Q, K, V: (32, 128, 64)
+  scores:  (32, 128, 128)
+  output:  (32, 128, 64)
+
+Concat: (32, 128, 384)
+Après W_O: (32, 128, 384)
+```
+
+---
+
+### Visualisation des têtes
+
+Après entraînement, on peut visualiser ce que chaque tête "regarde" :
+
+```
+Phrase: "Le chat dort sur le canapé"
+
+Tête 1: "dort" regarde fortement "chat"  (sujet-verbe)
+Tête 2: "le" regarde "canapé"            (déterminant-nom)
+Tête 3: tous regardent les voisins       (localité)
+```
+
+---
+
+### Paramètres
+
+```
+Par tête:
+  W_Q: d_model × d_k
+  W_K: d_model × d_k
+  W_V: d_model × d_k
+
+Total pour n_heads:
+  3 × n_heads × d_model × d_k = 3 × d_model²
+
+Plus W_O:
+  d_model × d_model
+
+Total Multi-Head Attention ≈ 4 × d_model²
+```
+
+</details>
+
+### Questions de vérification
+
+1. Si d_model=512 et n_heads=8, quelle est la dimension par tête ?
+2. Pourquoi utiliser plusieurs petites têtes plutôt qu'une grande ?
+3. À quoi sert la matrice W_O ?
+
+---
+
 ## Prochaines parties
-- **Partie 5** : Multi-Head Attention
 - **Partie 6** : Positional Encoding (RoPE)
-- **Partie 7** : Feed-Forward, RMSNorm, résiduel
+- **Partie 7** : Feed-Forward, RMSNorm, connexions résiduelles
 - **Partie 8** : Architecture GPT complète
 - **Partie 9** : Entraînement
 - **Partie 10** : Génération de texte
