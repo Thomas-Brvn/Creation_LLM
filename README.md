@@ -690,12 +690,155 @@ Total Multi-Head Attention ≈ 4 × d_model²
 
 ---
 
+## Partie 6 : Positional Encoding (RoPE)
+
+L'attention ne connaît **pas l'ordre des mots**. "Le chat mange la souris" et "La souris mange le chat" produiraient le même résultat sans encodage positionnel. **RoPE** (Rotary Position Embedding) injecte la position de chaque token en **tournant** ses vecteurs Q et K dans l'espace.
+
+```
+Position 0 → rotation de 0°
+Position 1 → rotation de θ°
+Position 2 → rotation de 2θ°
+...
+```
+
+<details>
+<summary><strong>📖 Voir les détails complets sur RoPE</strong></summary>
+
+---
+
+### Le problème
+
+L'attention calcule Q × Kᵀ. C'est un produit scalaire, qui est **invariant à l'ordre** :
+
+```
+Tokens: ["chat", "mange"]  →  score = Q_chat · K_mange
+Tokens: ["mange", "chat"]  →  score = Q_chat · K_mange  (identique !)
+```
+
+Le modèle ne sait pas qui vient avant qui.
+
+---
+
+### Anciennes approches
+
+**Positional Encoding sinusoïdal** (Transformer original) :
+
+```
+On additionne un vecteur de position à l'embedding :
+
+embedding_final = embedding + position_vector
+```
+
+Problème : la position est "mélangée" avec le sens du mot.
+
+**Positional Embedding appris** (GPT-2) :
+
+```
+Table de positions apprise : (max_seq_len, d_model)
+embedding_final = embedding + position_embedding[pos]
+```
+
+Problème : limité à max_seq_len positions vues à l'entraînement.
+
+---
+
+### RoPE : l'idée
+
+Au lieu d'**ajouter** la position, on **tourne** les vecteurs Q et K.
+
+L'idée clé : deux tokens à la position i et j auront un score d'attention qui dépend uniquement de leur **distance relative** (j - i), pas de leur position absolue.
+
+---
+
+### Comment ça marche ?
+
+On prend les dimensions de Q et K **par paires** et on applique une rotation 2D :
+
+```
+Dimensions [0,1] : rotation de pos × θ₁
+Dimensions [2,3] : rotation de pos × θ₂
+Dimensions [4,5] : rotation de pos × θ₃
+...
+```
+
+Chaque paire tourne à une fréquence différente :
+
+```
+θ_i = 1 / (10000^(2i/d_k))
+
+θ₁ = 1/10000^0     = 1.0       (haute fréquence)
+θ₂ = 1/10000^0.031 = 0.90      (...)
+...
+θ₃₂ = 1/10000^1    = 0.0001    (basse fréquence)
+```
+
+---
+
+### Rotation 2D
+
+Pour une paire de dimensions (q₀, q₁) à la position pos :
+
+```
+q₀' = q₀ × cos(pos × θ) - q₁ × sin(pos × θ)
+q₁' = q₀ × sin(pos × θ) + q₁ × cos(pos × θ)
+```
+
+C'est une simple rotation dans le plan.
+
+---
+
+### Pourquoi ça encode la distance relative ?
+
+Quand on calcule Q_i · K_j après rotation :
+
+```
+score(i, j) = f(q, k, i-j)
+```
+
+Le score ne dépend que de la **différence** (i-j), pas des positions absolues. Le modèle comprend naturellement que :
+- "chat" est 2 positions avant "mange"
+- Peu importe que ce soit aux positions (0,2) ou (5,7)
+
+---
+
+### Avantages de RoPE
+
+| Propriété | RoPE | Sinusoïdal | Appris |
+|-----------|------|------------|--------|
+| Distance relative | Oui | Non | Non |
+| Extrapolation (seq plus longues) | Bonne | Moyenne | Mauvaise |
+| Paramètres supplémentaires | 0 | 0 | max_seq × d |
+| Utilisé par | LLaMA, Mistral | Transformer orig. | GPT-2 |
+
+---
+
+### En résumé
+
+```
+Q, K (n, d_k)
+      ↓
+  Rotation par position (RoPE)
+      ↓
+Q_rot, K_rot (n, d_k)
+      ↓
+  Attention classique (Q_rot × K_rotᵀ / √d_k)
+```
+
+</details>
+
+### Questions de vérification
+
+1. Pourquoi l'attention seule ne connaît pas l'ordre des mots ?
+2. Quelle est la différence entre ajouter la position et tourner les vecteurs ?
+3. Pourquoi la distance relative est préférable à la position absolue ?
+
+---
+
 ## Prochaines parties
-- **Partie 6** : Positional Encoding (RoPE)
 - **Partie 7** : Feed-Forward, RMSNorm, connexions résiduelles
 - **Partie 8** : Architecture GPT complète
 - **Partie 9** : Entraînement
-- **Partie 10** : Génération de texte
+- **Partie 10** : Génération de texte et inférence
 
 ---
 
