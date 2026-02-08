@@ -834,8 +834,180 @@ Q_rot, K_rot (n, d_k)
 
 ---
 
+## Partie 7 : Feed-Forward, RMSNorm, connexions résiduelles
+
+Après l'attention, chaque token passe dans un **réseau Feed-Forward** qui transforme l'information individuellement. **RMSNorm** stabilise les valeurs, et les **connexions résiduelles** (x + f(x)) permettent au gradient de circuler même dans un réseau très profond.
+
+```
+x → RMSNorm → Attention → + x → RMSNorm → Feed-Forward → + x
+                          ↑ résiduel                      ↑ résiduel
+```
+
+<details>
+<summary><strong>📖 Voir les détails complets sur FFN, RMSNorm et résiduel</strong></summary>
+
+---
+
+### Feed-Forward Network (FFN)
+
+Après l'attention (qui mélange les tokens), le FFN traite **chaque token indépendamment** :
+
+```python
+def feed_forward(x):          # x: (n, d_model)
+    hidden = x @ W1 + b1      # (n, d_model) → (n, d_ff)
+    hidden = activation(hidden)
+    output = hidden @ W2 + b2  # (n, d_ff) → (n, d_model)
+    return output
+```
+
+---
+
+### Dimension cachée d_ff
+
+Le FFN projette d'abord vers un espace plus grand, puis revient :
+
+```
+d_model (384) → d_ff (1024) → d_model (384)
+```
+
+Typiquement : `d_ff ≈ 2.7 × d_model` (avec SwiGLU).
+
+Pourquoi ? L'espace élargi permet des transformations plus riches.
+
+---
+
+### SwiGLU (activation moderne)
+
+Les anciens Transformers utilisaient ReLU. Les modèles modernes (LLaMA, Mistral) utilisent **SwiGLU** :
+
+```python
+# ReLU classique
+hidden = ReLU(x @ W1)
+
+# SwiGLU (plus performant)
+gate = sigmoid(x @ W_gate) * (x @ W_gate)  # "porte"
+hidden = gate * (x @ W1)
+```
+
+SwiGLU utilise une matrice supplémentaire (W_gate) mais donne de meilleurs résultats.
+
+```
+Paramètres FFN:
+  Classique: 2 × d_model × d_ff
+  SwiGLU:    3 × d_model × d_ff (W1, W2, W_gate)
+```
+
+---
+
+### RMSNorm
+
+Normalise les vecteurs pour stabiliser l'entraînement :
+
+```python
+def rmsnorm(x):
+    rms = sqrt(mean(x²))  # Racine de la moyenne des carrés
+    return (x / rms) * gamma  # gamma = paramètre appris
+```
+
+Comparaison avec LayerNorm :
+
+| | LayerNorm | RMSNorm |
+|---|-----------|---------|
+| Centrage (- moyenne) | Oui | Non |
+| Normalisation | Oui | Oui |
+| Vitesse | Plus lent | Plus rapide |
+| Utilisé par | GPT-2, BERT | LLaMA, Mistral |
+
+RMSNorm est plus simple et tout aussi efficace.
+
+---
+
+### Pre-Norm vs Post-Norm
+
+**Post-Norm** (Transformer original) :
+```
+x → Attention → Add(x) → LayerNorm → FFN → Add → LayerNorm
+```
+
+**Pre-Norm** (GPT moderne, LLaMA) :
+```
+x → RMSNorm → Attention → Add(x) → RMSNorm → FFN → Add(x)
+```
+
+Pre-Norm est plus stable à l'entraînement, surtout pour les grands modèles.
+
+---
+
+### Connexions résiduelles
+
+Le `+ x` après chaque sous-couche :
+
+```python
+# Sans résiduel
+x = attention(x)      # Si le gradient disparaît ici, tout est bloqué
+
+# Avec résiduel
+x = x + attention(x)  # Le gradient passe toujours via la "route directe"
+```
+
+Pourquoi c'est crucial ?
+
+```
+Sans résiduel (6 couches):
+  gradient × 0.1 × 0.1 × 0.1 × 0.1 × 0.1 × 0.1 = 0.000001 → disparaît
+
+Avec résiduel:
+  le gradient a toujours un chemin direct vers chaque couche
+```
+
+---
+
+### Le bloc Transformer complet
+
+En combinant tout :
+
+```python
+def transformer_block(x):
+    # Sous-couche 1 : Attention
+    residual = x
+    x = rmsnorm(x)
+    x = multi_head_attention(x)
+    x = residual + x              # connexion résiduelle
+
+    # Sous-couche 2 : Feed-Forward
+    residual = x
+    x = rmsnorm(x)
+    x = feed_forward_swiglu(x)
+    x = residual + x              # connexion résiduelle
+
+    return x
+```
+
+```
+Entrée (n, 384)
+    ↓
+┌─ RMSNorm → Multi-Head Attention ─┐
+│              ↓                    │
+└──────────── Add ←─────────────────┘
+    ↓
+┌─ RMSNorm → Feed-Forward (SwiGLU) ┐
+│              ↓                    │
+└──────────── Add ←─────────────────┘
+    ↓
+Sortie (n, 384)
+```
+
+</details>
+
+### Questions de vérification
+
+1. Pourquoi le FFN projette vers d_ff > d_model puis revient ?
+2. Quel est l'avantage de RMSNorm sur LayerNorm ?
+3. Que se passe-t-il sans connexions résiduelles dans un réseau profond ?
+
+---
+
 ## Prochaines parties
-- **Partie 7** : Feed-Forward, RMSNorm, connexions résiduelles
 - **Partie 8** : Architecture GPT complète
 - **Partie 9** : Entraînement
 - **Partie 10** : Génération de texte et inférence
