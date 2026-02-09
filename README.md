@@ -1007,8 +1007,186 @@ Sortie (n, 384)
 
 ---
 
+## Partie 8 : Architecture GPT complète
+
+On assemble tout. GPT empile **N blocs Transformer identiques**, avec un embedding en entrée et une projection vers le vocabulaire en sortie :
+
+```
+Tokens → Embedding → [Bloc Transformer × N] → RMSNorm → LM Head → Probabilités
+```
+
+Notre modèle : 6 couches, 6 têtes, d_model=384, vocab_size=8192 → **~10M paramètres**.
+
+<details>
+<summary><strong>📖 Voir les détails complets sur l'architecture GPT</strong></summary>
+
+---
+
+### Vue d'ensemble
+
+```
+Input IDs (batch, seq)
+       ↓
+Token Embedding          (vocab_size, d_model)
+       ↓
+┌─────────────────────┐
+│  Transformer Block 1 │
+│  ┌─ RMSNorm → MHA ─┐│
+│  └─── + résiduel ───┘│
+│  ┌─ RMSNorm → FFN ─┐│
+│  └─── + résiduel ───┘│
+├─────────────────────┤
+│  Transformer Block 2 │
+│        ...           │
+├─────────────────────┤
+│  Transformer Block 6 │
+│        ...           │
+└─────────────────────┘
+       ↓
+RMSNorm finale
+       ↓
+LM Head (d_model → vocab_size)
+       ↓
+Logits (batch, seq, vocab_size)
+```
+
+---
+
+### Token Embedding
+
+Convertit les IDs en vecteurs :
+
+```python
+self.token_emb = nn.Embedding(vocab_size, d_model)
+# (batch, seq) → (batch, seq, d_model)
+```
+
+Pas de positional embedding séparé : RoPE est appliqué directement dans l'attention.
+
+---
+
+### Les N blocs Transformer
+
+Chaque bloc est identique (mêmes composants, mais poids différents) :
+
+```python
+self.layers = nn.ModuleList([
+    TransformerBlock(d_model, n_heads, d_ff)
+    for _ in range(n_layers)
+])
+```
+
+Les couches basses captent des patterns simples (syntaxe, proximité), les couches hautes captent des patterns complexes (sémantique, raisonnement).
+
+---
+
+### RMSNorm finale
+
+Après le dernier bloc, une normalisation finale avant la projection :
+
+```python
+self.final_norm = RMSNorm(d_model)
+```
+
+---
+
+### LM Head (Language Model Head)
+
+Projette les vecteurs vers le vocabulaire pour obtenir les probabilités du prochain token :
+
+```python
+self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
+# (batch, seq, d_model) → (batch, seq, vocab_size)
+```
+
+---
+
+### Weight Tying
+
+Astuce : on **partage les poids** entre l'embedding et le LM Head :
+
+```python
+self.lm_head.weight = self.token_emb.weight
+```
+
+Pourquoi ?
+- L'embedding convertit ID → vecteur
+- Le LM Head convertit vecteur → ID
+- Ce sont des opérations inverses → partager les poids est logique
+- Économise `vocab_size × d_model` paramètres (3M dans notre cas)
+
+---
+
+### Forward pass complet
+
+```python
+def forward(self, input_ids):
+    # 1. Embedding
+    x = self.token_emb(input_ids)        # (B, S) → (B, S, 384)
+
+    # 2. N blocs Transformer
+    for layer in self.layers:
+        x = layer(x)                      # (B, S, 384) → (B, S, 384)
+
+    # 3. Normalisation finale
+    x = self.final_norm(x)               # (B, S, 384)
+
+    # 4. Projection vers le vocabulaire
+    logits = self.lm_head(x)             # (B, S, 384) → (B, S, 8192)
+
+    return logits
+```
+
+---
+
+### Comptage des paramètres
+
+```
+Notre modèle (d_model=384, n_layers=6, n_heads=6, vocab_size=8192):
+
+Token Embedding:     8192 × 384          = 3,145,728
+
+Par bloc Transformer (×6):
+  RMSNorm (att):     384                 = 384
+  W_Q, W_K, W_V:     3 × 384 × 384      = 442,368
+  W_O:                384 × 384          = 147,456
+  RMSNorm (ffn):     384                 = 384
+  FFN (SwiGLU):      3 × 384 × 1024     = 1,179,648
+  Sous-total bloc:                       = 1,770,240
+
+6 blocs:             6 × 1,770,240       = 10,621,440
+
+RMSNorm finale:      384                 = 384
+LM Head:             partagé (0 extra)   = 0
+
+TOTAL ≈ 13.8M paramètres
+```
+
+---
+
+### Comparaison avec d'autres modèles
+
+| Modèle | Paramètres | Couches | d_model | Têtes |
+|--------|-----------|---------|---------|-------|
+| **Notre mini-GPT** | ~14M | 6 | 384 | 6 |
+| GPT-2 Small | 117M | 12 | 768 | 12 |
+| GPT-2 XL | 1.5B | 48 | 1600 | 25 |
+| LLaMA 7B | 7B | 32 | 4096 | 32 |
+| GPT-4 | ~1.8T (estimé) | ? | ? | ? |
+
+Le principe est identique, seule l'échelle change.
+
+</details>
+
+### Questions de vérification
+
+1. Pourquoi partager les poids entre embedding et LM Head ?
+2. Quel est le rôle de la RMSNorm finale ?
+3. Pourquoi les couches hautes captent des patterns plus complexes ?
+
+---
+
 ## Prochaines parties
-- **Partie 8** : Architecture GPT complète
 - **Partie 9** : Entraînement
 - **Partie 10** : Génération de texte et inférence
 
